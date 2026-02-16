@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% block title %}{{ trader.first_name }} {{ trader.last_name }} — Upside Funding{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('dashboard.index') }}" class="back-link">← All Traders</a>
+        <h1 style="margin-top:6px;">{{ trader.first_name }} {{ trader.last_name }}</h1>
+        <span class="dim small">{{ trader.email }} &nbsp;·&nbsp; Login <span class="mono">{{ trader.login }}</span></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+        {% if trader.status == 'REVIEW' %}
+            <span class="pill pill-review">REVIEW</span>
+        {% else %}
+            <span class="pill pill-active">ACTIVE</span>
+        {% endif %}
+        <span class="phase-tag">{{ trader.phase }}</span>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stat-cards-row">
+    <div class="stat-card">
+        <div class="sc-label">STARTING BALANCE</div>
+        <div class="sc-value mono">${{ "{:,.0f}".format(trader.starting_balance) if trader.starting_balance else '—' }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="sc-label">CURRENT EQUITY</div>
+        <div class="sc-value mono fw-600">${{ "{:,.0f}".format(trader.current_equity) if trader.current_equity else '—' }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="sc-label">NET CHANGE</div>
+        <div class="sc-value mono {{ 'pos' if trader.change > 0 else ('neg' if trader.change < 0 else '') }}">
+            {% if trader.change %}{{ "{:+,.0f}".format(trader.change) }}{% else %}—{% endif %}
+        </div>
+    </div>
+    <div class="stat-card highlight-card">
+        <div class="sc-label">GAIN / LOSS</div>
+        <div class="sc-value mono large {{ 'pos' if trader.gain_loss_pct > 0 else ('neg' if trader.gain_loss_pct < 0 else '') }}">
+            {{ "{:+.3f}".format(trader.gain_loss_pct) }}%
+        </div>
+    </div>
+    {% if trader.phase == 'Funded' %}
+    <div class="stat-card">
+        <div class="sc-label">PROFIT SHARE</div>
+        <div class="sc-value mono">{{ trader.profit_share_pct | int }}%</div>
+    </div>
+    <div class="stat-card">
+        <div class="sc-label">POT. LIABILITY</div>
+        <div class="sc-value mono {{ 'neg' if trader.pot_liability > 0 else 'dim' }}">
+            ${{ "{:,.0f}".format(trader.pot_liability) }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Equity Curve -->
+<div class="panel">
+    <div class="panel-header">
+        <span class="panel-title">EQUITY CURVE</span>
+        <div class="chart-legend">
+            <span class="legend-dot blue"></span><span>Equity</span>
+            <span class="legend-dot green" style="margin-left:14px;"></span><span>Balance</span>
+        </div>
+    </div>
+    <div class="chart-wrap">
+        <canvas id="equityChart"></canvas>
+    </div>
+</div>
+
+<!-- Trade Log -->
+<div class="panel">
+    <div class="panel-header">
+        <span class="panel-title">TRADE LOG</span>
+        <span class="dim small">{{ deals | length }} records</span>
+    </div>
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>TIME</th>
+                    <th>SYMBOL</th>
+                    <th>TYPE</th>
+                    <th class="r">VOLUME</th>
+                    <th class="r">PROFIT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in deals %}
+                <tr>
+                    <td class="mono dim small">{{ d.time }}</td>
+                    <td class="fw-500">{{ d.symbol or '—' }}</td>
+                    <td class="dim small">{{ d.type if d.type is defined else '—' }}</td>
+                    <td class="r mono">{{ d.volume or '—' }}</td>
+                    <td class="r mono {{ 'pos' if (d.profit or 0) > 0 else ('neg' if (d.profit or 0) < 0 else 'dim') }}">
+                        {% if d.profit is not none %}${{ "{:,.2f}".format(d.profit) }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="empty-row">No trades found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/api/trader/{{ trader.login }}/equity')
+    .then(r => r.json())
+    .then(data => {
+        const ctx = document.getElementById('equityChart');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: 'Equity',
+                        data: data.equity,
+                        borderColor: '#4f8ef7',
+                        backgroundColor: 'rgba(79,142,247,0.06)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.3,
+                        fill: true,
+                        order: 1,
+                    },
+                    {
+                        label: 'Balance',
+                        data: data.daily_balance,
+                        borderColor: 'rgba(129,199,132,0.7)',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                        order: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1d27',
+                        borderColor: '#2a2d3e',
+                        borderWidth: 1,
+                        titleColor: '#888',
+                        bodyColor: '#e0e0e0',
+                        padding: 10,
+                        callbacks: {
+                            label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y?.toLocaleString('en-US', {minimumFractionDigits:2}) ?? '—'}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#444', maxTicksLimit: 12, font: { family: 'monospace', size: 11 } },
+                        grid: { color: 'rgba(255,255,255,0.03)' },
+                        border: { color: '#2a2d3e' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#666',
+                            font: { family: 'monospace', size: 11 },
+                            callback: v => '$' + v.toLocaleString()
+                        },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        border: { color: '#2a2d3e' }
+                    }
+                }
+            }
+        });
+    })
+    .catch(() => {
+        document.querySelector('.chart-wrap').innerHTML = '<p class="dim small" style="padding:40px;text-align:center;">No equity data available.</p>';
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Upside Funding{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="topnav">
+    <div class="nav-brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">UPSIDE</span>
+        <span class="brand-sub">FUNDING</span>
+    </div>
+    <div class="nav-right">
+        <span class="nav-user">{{ current_user.name }}</span>
+        <span class="nav-role">{{ current_user.role }}</span>
+        <a href="{{ url_for('auth.logout') }}" class="nav-logout">Sign out</a>
+    </div>
+</nav>
+{% endif %}
+
+<main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

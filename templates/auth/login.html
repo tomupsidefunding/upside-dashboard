@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — Upside Funding</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+
+<div class="login-page">
+    <div class="login-box">
+
+        <div class="login-logo">
+            <span class="login-logo-mark"></span>
+            <span class="login-logo-name">UPSIDE FUNDING</span>
+        </div>
+
+        <h1 class="login-title">Sign in</h1>
+        <p class="login-sub">Analytics Dashboard</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('auth.login') }}">
+            <div class="form-field">
+                <label for="email">EMAIL</label>
+                <input type="email" id="email" name="email" required autofocus autocomplete="email">
+            </div>
+            <div class="form-field">
+                <label for="password">PASSWORD</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn-login">Sign In →</button>
+        </form>
+
+    </div>
+</div>
+
+</body>
+</html>

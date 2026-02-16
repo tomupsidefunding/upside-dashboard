@@ -1,0 +1,6 @@
+.env
+*.pyc
+__pycache__
+AppData
+Local
+Application Data

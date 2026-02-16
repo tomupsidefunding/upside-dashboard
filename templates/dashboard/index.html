@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Upside Funding{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div class="page-title">
+        <span class="title-eyebrow">UPSIDE FUNDING</span>
+        <h1>Manager Dashboard</h1>
+    </div>
+    <div class="page-meta">
+        <span class="live-dot"></span>
+        <span class="live-label">LIVE</span>
+        <span class="meta-divider">|</span>
+        <span id="clock" class="mono-time"></span>
+    </div>
+</div>
+
+<!-- Summary Bar -->
+<div class="summary-bar">
+    <div class="stat-block">
+        <div class="stat-label">TOTAL ACCOUNTS</div>
+        <div class="stat-num">{{ summary.total }}</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-block">
+        <div class="stat-label">FUNDED</div>
+        <div class="stat-num accent-blue">{{ summary.funded }}</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">PHASE 2</div>
+        <div class="stat-num">{{ summary.phase2 }}</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">1-STEP</div>
+        <div class="stat-num">{{ summary.one_step }}</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">PHASE 1</div>
+        <div class="stat-num">{{ summary.phase1 }}</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-block">
+        <div class="stat-label">CURRENT LIABILITY</div>
+        <div class="stat-num accent-red">${{ "{:,.0f}".format(summary.total_liability) }}</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">TOTAL EQUITY</div>
+        <div class="stat-num accent-green">${{ "{:,.0f}".format(summary.total_equity) }}</div>
+    </div>
+    <div class="stat-block">
+        <div class="stat-label">WTD. AVG P&amp;L</div>
+        <div class="stat-num {{ 'accent-green' if summary.weighted_avg_gain_loss > 0 else 'accent-red' }}">
+            {{ "{:+.3f}".format(summary.weighted_avg_gain_loss) }}%
+        </div>
+    </div>
+</div>
+
+<!-- Phase Sections -->
+{% for phase in phase_order %}
+{% set traders = by_phase.get(phase, []) %}
+{% if traders %}
+
+{% set phase_equity = namespace(total=0) %}
+{% set phase_weighted = namespace(sum=0) %}
+{% for t in traders %}
+    {% set phase_equity.total = phase_equity.total + (t.current_equity or 0) %}
+    {% set phase_weighted.sum = phase_weighted.sum + (t.gain_loss_pct * (t.current_equity or 0)) %}
+{% endfor %}
+{% set phase_avg = (phase_weighted.sum / phase_equity.total) if phase_equity.total > 0 else 0 %}
+
+<section class="phase-section">
+    <div class="phase-header">
+        <div class="phase-title-row">
+            <span class="phase-pip phase-pip-{{ loop.index }}"></span>
+            <h2 class="phase-title">{{ phase | upper }}</h2>
+            <span class="phase-count">{{ traders | length }}</span>
+        </div>
+        <div class="phase-stats">
+            <span class="phase-stat">Equity <strong>${{ "{:,.0f}".format(phase_equity.total) }}</strong></span>
+            <span class="phase-stat">Wtd Avg <strong class="{{ 'accent-green' if phase_avg > 0 else 'accent-red' }}">{{ "{:+.3f}".format(phase_avg) }}%</strong></span>
+            {% if phase == 'Funded' %}
+            {% set total_liab = namespace(v=0) %}
+            {% for t in traders %}{% set total_liab.v = total_liab.v + (t.pot_liability or 0) %}{% endfor %}
+            <span class="phase-stat">Liability <strong class="accent-red">${{ "{:,.0f}".format(total_liab.v) }}</strong></span>
+            {% endif %}
+        </div>
+        <button class="collapse-btn" onclick="toggleSection(this, 'pb{{ loop.index }}')">▾</button>
+    </div>
+
+    <div class="phase-body" id="pb{{ loop.index }}">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>LOGIN</th>
+                    <th>NAME</th>
+                    <th>EMAIL</th>
+                    <th>CATEGORY</th>
+                    <th>STATUS</th>
+                    <th class="r">START BAL.</th>
+                    <th class="r">EQUITY</th>
+                    <th class="r">CHANGE</th>
+                    <th class="r">GAIN / LOSS</th>
+                    {% if phase == 'Funded' %}<th class="r">LIABILITY</th>{% endif %}
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in traders %}
+                <tr class="data-row {{ 'row-review' if t.status == 'REVIEW' }}"
+                    onclick="window.location='{{ url_for('dashboard.trader_detail', login=t.login) }}'">
+                    <td class="mono dim-light">{{ t.login }}</td>
+                    <td class="fw-500">{{ t.first_name }} {{ t.last_name }}</td>
+                    <td class="dim small">{{ t.email }}</td>
+                    <td class="dim small">{{ t.category or '—' }}</td>
+                    <td>
+                        {% if t.status == 'REVIEW' %}
+                            <span class="pill pill-review">REVIEW</span>
+                        {% else %}
+                            <span class="pill pill-active">ACTIVE</span>
+                        {% endif %}
+                    </td>
+                    <td class="r mono">${{ "{:,.0f}".format(t.starting_balance) if t.starting_balance else '—' }}</td>
+                    <td class="r mono fw-500">${{ "{:,.0f}".format(t.current_equity) if t.current_equity else '—' }}</td>
+                    <td class="r mono {{ 'pos' if t.change > 0 else ('neg' if t.change < 0 else '') }}">
+                        {% if t.change %}{{ "{:+,.0f}".format(t.change) }}{% else %}—{% endif %}
+                    </td>
+                    <td class="r mono pnl-cell">
+                        <div class="pnl-row">
+                            <div class="minibar-track">
+                                <div class="minibar {{ 'bar-pos' if t.gain_loss_pct > 0 else 'bar-neg' }}"
+                                     style="width:{{ [t.gain_loss_pct | abs * 5, 100] | min }}%"></div>
+                            </div>
+                            <span class="{{ 'pos' if t.gain_loss_pct > 0 else ('neg' if t.gain_loss_pct < 0 else '') }}">
+                                {{ "{:+.3f}".format(t.gain_loss_pct) }}%
+                            </span>
+                        </div>
+                    </td>
+                    {% if phase == 'Funded' %}
+                    <td class="r mono {{ 'neg' if t.pot_liability > 0 else 'dim' }}">
+                        ${{ "{:,.0f}".format(t.pot_liability) }}
+                    </td>
+                    {% endif %}
+                    <td class="col-action">
+                        <a href="{{ url_for('dashboard.trader_detail', login=t.login) }}"
+                           class="arrow-link" onclick="event.stopPropagation()">↗</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% endif %}
+{% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+        now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function toggleSection(btn, id) {
+    const body = document.getElementById(id);
+    const collapsed = body.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▸' : '▾';
+}
+</script>
+{% endblock %}
