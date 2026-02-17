@@ -242,24 +242,25 @@ def _process_rows(rows: list, payout_map: dict) -> list:
         pot_liability = change * payout_pct if (phase == 'Funded' and change > 0) else 0
 
         processed.append({
-            'login':          login,
-            'category':       row.get('category'),
-            'phase':          phase,
-            'first_name':     row.get('first_name'),
-            'last_name':      row.get('last_name'),
-            'email':          row.get('email'),
-            'equity':         current_equity or 0,
-            'gain_loss_pct':  gain_loss_pct,
-            'gain_loss_raw':  change,
-            'pot_liability':  pot_liability,
-            'payout_pct':     payout_pct * 100,  # Convert to percentage for display
-            'status':         row.get('status'),
+            'login':            login,
+            'category':         row.get('category'),
+            'phase':            phase,
+            'first_name':       row.get('first_name'),
+            'last_name':        row.get('last_name'),
+            'email':            row.get('email'),
+            'starting_balance': starting_balance or 0,
+            'current_equity':   current_equity or 0,
+            'change':           change,
+            'gain_loss_pct':    gain_loss_pct,
+            'pot_liability':    pot_liability,
+            'payout_pct':       payout_pct * 100,  # Convert to percentage for display
+            'status':           row.get('status'),
         })
 
     return processed
 
 
-def get_trader_roster():
+def get_roster():
     """
     Main roster query — returns all active traders with stats.
     Also fetches dynamic payout percentages.
@@ -286,14 +287,14 @@ def get_trader_roster():
 
 def get_trader_roster_row(login: int):
     """Get a single trader row by login"""
-    roster = get_trader_roster()
+    roster = get_roster()
     for row in roster:
         if row['login'] == login:
             return row
     return None
 
 
-def get_summary_stats(roster: list):
+def get_roster_summary(roster: list):
     """Calculate summary statistics from roster"""
     total = len(roster)
     funded = sum(1 for r in roster if r['phase'] == 'Funded')
@@ -302,11 +303,11 @@ def get_summary_stats(roster: list):
     phase1 = sum(1 for r in roster if r['phase'] == 'Phase 1')
     
     total_liability = sum(r['pot_liability'] for r in roster if r['phase'] == 'Funded')
+    total_equity = sum(r['current_equity'] for r in roster)
     
     # Weighted average performance
-    total_equity = sum(r['equity'] for r in roster)
-    weighted_avg = (
-        sum(r['gain_loss_pct'] * r['equity'] for r in roster) / total_equity
+    weighted_avg_gain_loss = (
+        sum(r['gain_loss_pct'] * r['current_equity'] for r in roster) / total_equity
         if total_equity > 0 else 0
     )
 
@@ -317,8 +318,8 @@ def get_summary_stats(roster: list):
         'one_step': one_step,
         'phase1': phase1,
         'total_liability': total_liability,
-        'weighted_avg_pct': round(weighted_avg, 3),
         'total_equity': total_equity,
+        'weighted_avg_gain_loss': round(weighted_avg_gain_loss, 3),
     }
 
 
