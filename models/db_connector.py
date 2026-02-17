@@ -11,6 +11,7 @@ Databases:
 
 import os
 import re
+import json
 import pymysql
 import pymysql.cursors
 from contextlib import contextmanager
@@ -47,6 +48,90 @@ def prod_conn():
         yield conn
     finally:
         conn.close()
+
+
+# ── Payout percentage query ────────────────────────────────────────────────────
+
+def get_payout_percentages():
+    """
+    Query payout percentages for all traders.
+    Returns dict mapping login -> payout_pct (0.85 or 0.95)
+    Default to 0.85 if not found or on error.
+    """
+    try:
+        with prod_conn() as conn:
+            cursor = conn.cursor()
+            
+            # Query to get payout percentages for all accounts
+            payout_query = """
+            SELECT
+                ca.number,
+                JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'title', ups.title,
+                        'value', ups_items.val
+                    )
+                ) AS upsale_values
+            FROM bl_fund_production.challenge_accounts ca
+            LEFT JOIN bl_fund_production.challenge_types ct
+                ON ca.challenge_type_id = ct.id
+            LEFT JOIN bl_fund_production.account_types at
+                ON ct.account_type_id = at.id
+            LEFT JOIN bl_fund_production.task_challenge_demo_account_payloads AS demo_payload
+                ON ca.id = demo_payload.challenge_account_id
+                AND at.type = 'demo'
+            LEFT JOIN bl_fund_production.task_challenge_live_account_payloads AS live_payload
+                ON ca.id = live_payload.challenge_account_id
+                AND at.type = 'live'
+            LEFT JOIN bl_fund_production.challenge_payments cp
+                ON COALESCE(demo_payload.challenge_payment_id, live_payload.challenge_payment_id) = cp.id
+            LEFT JOIN bl_fund_production.challenge_types_upsale ups
+                ON JSON_CONTAINS(cp.conditions, JSON_QUOTE(ups.id), '$')
+            LEFT JOIN JSON_TABLE(
+                ups.values,
+                '$[*]' COLUMNS (
+                    challengeTypeId CHAR(36) PATH '$.challengeTypeId',
+                    val BOOLEAN PATH '$.value'
+                )
+            ) AS ups_items
+                ON ups_items.challengeTypeId = ct.id 
+            WHERE cp.type = 'deposit'
+            GROUP BY ca.number
+            """
+            
+            cursor.execute(payout_query)
+            payout_rows = cursor.fetchall()
+            
+            # Create mapping: login -> payout percentage
+            payout_map = {}
+            for row in payout_rows:
+                login = row['number']
+                upsale_json = row['upsale_values']
+                
+                # Default to 85% (0.85)
+                payout_pct = 0.85
+                
+                # Parse the JSON to check for 95% upgrade
+                if upsale_json:
+                    try:
+                        upsale_data = json.loads(upsale_json)
+                        # Check if any upsale has a non-null value
+                        for item in upsale_data:
+                            if item.get('title') and item.get('value') is not None:
+                                # If we have a valid upsale (95% payout), set to 0.95
+                                payout_pct = 0.95
+                                break
+                    except:
+                        pass
+                
+                payout_map[login] = payout_pct
+            
+            return payout_map
+            
+    except Exception as e:
+        print(f"Warning: Could not retrieve payout percentages: {e}")
+        print("Defaulting all accounts to 85% payout")
+        return {}
 
 
 # ── Main roster query ──────────────────────────────────────────────────────────
@@ -91,7 +176,6 @@ SELECT * FROM (
 WHERE rn = 1
 """
 
-PROFIT_SHARE_PCT = 0.70
 HOUSE_ACCOUNT_EMAIL = 'analytics@theupsidefunding.com'
 PHASE_ORDER = ['House Account', 'Funded', 'Phase 2', '1-Step', 'Phase 1', 'UNKNOWN']
 
@@ -113,13 +197,13 @@ def _to_float(val) -> float | None:
         return None
 
 
-def _process_rows(rows: list) -> list:
+def _process_rows(rows: list, payout_map: dict) -> list:
     """
     Apply the same post-processing logic as the production script:
     - Starting balance fallback chain
     - Equity fallback chain
     - Gain/loss %
-    - Pot. liability
+    - Pot. liability (with dynamic payout %)
     - House account labelling
     - Exclude TEST NEW accounts
     """
@@ -150,146 +234,117 @@ def _process_rows(rows: list) -> list:
         change = (current_equity - starting_balance) if (current_equity and starting_balance) else 0
         gain_loss_pct = round((change / starting_balance * 100), 3) if starting_balance else 0
 
-        # Pot. liability (Funded only)
-        pot_liability = (change * PROFIT_SHARE_PCT) if (phase == 'Funded' and change > 0) else 0
+        # Get payout percentage for this login (default 0.85 if not found)
+        login = row.get('login')
+        payout_pct = payout_map.get(login, 0.85)
+        
+        # Pot. liability - ONLY for Funded with positive gains, using dynamic payout %
+        pot_liability = change * payout_pct if (phase == 'Funded' and change > 0) else 0
 
         processed.append({
-            'login':            row.get('login'),
-            'category':         row.get('category'),
-            'title':            title,
-            'phase':            phase,
-            'trader_id':        row.get('trader_id'),
-            'first_name':       row.get('first_name') or '',
-            'last_name':        row.get('last_name') or '',
-            'email':            row.get('email') or '',
-            'status':           str(row.get('status') or '').upper(),
-            'starting_balance': starting_balance,
-            'current_equity':   current_equity,
-            'change':           change,
-            'gain_loss_pct':    gain_loss_pct,
-            'profit_share_pct': PROFIT_SHARE_PCT * 100 if phase == 'Funded' else None,
-            'pot_liability':    round(pot_liability, 2),
-            'date_time':        row.get('date_time'),
+            'login':          login,
+            'category':       row.get('category'),
+            'phase':          phase,
+            'first_name':     row.get('first_name'),
+            'last_name':      row.get('last_name'),
+            'email':          row.get('email'),
+            'equity':         current_equity or 0,
+            'gain_loss_pct':  gain_loss_pct,
+            'gain_loss_raw':  change,
+            'pot_liability':  pot_liability,
+            'payout_pct':     payout_pct * 100,  # Convert to percentage for display
+            'status':         row.get('status'),
         })
 
     return processed
 
 
-def get_roster() -> list:
+def get_trader_roster():
     """
-    Full trader roster — the main dataset for the manager dashboard.
-    Returns processed rows sorted by phase order then gain/loss desc.
+    Main roster query — returns all active traders with stats.
+    Also fetches dynamic payout percentages.
     """
     with prod_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(ROSTER_QUERY)
-            rows = cur.fetchall()
+        cursor = conn.cursor()
+        cursor.execute(ROSTER_QUERY)
+        rows = cursor.fetchall()
 
-    processed = _process_rows(rows)
+    # Get payout percentages
+    payout_map = get_payout_percentages()
+    
+    # Process with dynamic payout map
+    processed = _process_rows(rows, payout_map)
 
-    # Sort: phase order first, then gain/loss desc within phase
-    phase_rank = {p: i for i, p in enumerate(PHASE_ORDER)}
+    # Sort by phase, then by gain_loss_pct descending
+    phase_idx_map = {p: i for i, p in enumerate(PHASE_ORDER)}
     processed.sort(
-        key=lambda r: (phase_rank.get(r['phase'], 99), -r['gain_loss_pct'])
+        key=lambda x: (phase_idx_map.get(x['phase'], 999), -x['gain_loss_pct'])
     )
+
     return processed
 
 
-def get_roster_summary(roster: list | None = None) -> dict:
-    """
-    Aggregate summary cards for the top of the manager dashboard.
-    Pass an existing roster list to avoid a second DB hit.
-    """
-    rows = roster if roster is not None else get_roster()
+def get_trader_roster_row(login: int):
+    """Get a single trader row by login"""
+    roster = get_trader_roster()
+    for row in roster:
+        if row['login'] == login:
+            return row
+    return None
 
-    summary = {
-        'total':           len(rows),
-        'house':           0,
-        'funded':          0,
-        'one_step':        0,
-        'phase2':          0,
-        'phase1':          0,
-        'unknown':         0,
-        'total_liability': 0.0,
-        'total_equity':    0.0,
+
+def get_summary_stats(roster: list):
+    """Calculate summary statistics from roster"""
+    total = len(roster)
+    funded = sum(1 for r in roster if r['phase'] == 'Funded')
+    phase2 = sum(1 for r in roster if r['phase'] == 'Phase 2')
+    one_step = sum(1 for r in roster if r['phase'] == '1-Step')
+    phase1 = sum(1 for r in roster if r['phase'] == 'Phase 1')
+    
+    total_liability = sum(r['pot_liability'] for r in roster if r['phase'] == 'Funded')
+    
+    # Weighted average performance
+    total_equity = sum(r['equity'] for r in roster)
+    weighted_avg = (
+        sum(r['gain_loss_pct'] * r['equity'] for r in roster) / total_equity
+        if total_equity > 0 else 0
+    )
+
+    return {
+        'total': total,
+        'funded': funded,
+        'phase2': phase2,
+        'one_step': one_step,
+        'phase1': phase1,
+        'total_liability': total_liability,
+        'weighted_avg_pct': round(weighted_avg, 3),
     }
 
-    for r in rows:
-        phase = r['phase']
-        if phase == 'House Account': summary['house'] += 1
-        elif phase == 'Funded':      summary['funded'] += 1
-        elif phase == '1-Step':      summary['one_step'] += 1
-        elif phase == 'Phase 2':     summary['phase2'] += 1
-        elif phase == 'Phase 1':     summary['phase1'] += 1
-        else:                        summary['unknown'] += 1
 
-        summary['total_liability'] += r['pot_liability'] or 0
-        summary['total_equity']    += r['current_equity'] or 0
+# ── Trade history queries ──────────────────────────────────────────────────────
 
-    # Weighted average gain/loss across all non-house accounts
-    trading_rows = [r for r in rows if r['phase'] != 'House Account']
-    total_eq = sum(r['current_equity'] or 0 for r in trading_rows)
-    if total_eq:
-        summary['weighted_avg_gain_loss'] = round(
-            sum((r['gain_loss_pct'] * (r['current_equity'] or 0)) for r in trading_rows) / total_eq, 3
-        )
-    else:
-        summary['weighted_avg_gain_loss'] = 0.0
-
-    return summary
-
-
-def get_trader_roster_row(login: int) -> dict | None:
-    """Single trader's roster row (for the drill-down header)."""
-    roster = get_roster()
-    return next((r for r in roster if r['login'] == login), None)
-
-
-def get_daily_equity_series(login: int) -> list:
-    """
-    Daily equity snapshots for a single login — used to render the equity curve.
-    Returns list of {date, equity, daily_balance} dicts ordered oldest to newest.
-    """
+def get_deals(login: int, limit: int = 50):
+    """Get recent deals for a trader"""
     with mt5_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT
-                    FROM_UNIXTIME(date_time) AS date,
-                    equity,
-                    daily_balance
-                FROM `TheUpsideFunding-MT5`.daily
-                WHERE login = %s
-                  AND date_time IS NOT NULL
-                ORDER BY date_time ASC
-            """, (login,))
-            return cur.fetchall()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Deal, Login, Time, Symbol, Action, Entry, Volume, Price, Profit
+            FROM deals
+            WHERE Login = %s
+            ORDER BY Time DESC
+            LIMIT %s
+        """, (login, limit))
+        return cursor.fetchall()
 
 
-def get_deals(login: int, limit: int = 500) -> list:
-    """
-    Closed deals for a single login, newest first.
-    """
+def get_daily_equity_series(login: int):
+    """Get equity curve data for Chart.js"""
     with mt5_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT *
-                FROM `TheUpsideFunding-MT5`.deals
-                WHERE login = %s
-                ORDER BY time DESC
-                LIMIT %s
-            """, (login, limit))
-            return cur.fetchall()
-
-
-def test_connections() -> dict:
-    """Smoke-test both DB connections — call on app startup."""
-    results = {}
-    for name, ctx in [('MT5', mt5_conn), ('Production', prod_conn)]:
-        try:
-            with ctx() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-            results[name] = 'connected'
-        except Exception as e:
-            results[name] = f'ERROR: {e}'
-    return results
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DATE(FROM_UNIXTIME(date_time)) as date, equity, daily_balance
+            FROM daily
+            WHERE login = %s AND date_time IS NOT NULL
+            ORDER BY date_time ASC
+        """, (login,))
+        return cursor.fetchall()
