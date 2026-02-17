@@ -101,6 +101,7 @@
                     <th class="r">EQUITY</th>
                     <th class="r">CHANGE</th>
                     <th class="r">GAIN / LOSS</th>
+                    <th class="r">PAYOUT %</th>
                     {% if phase == 'Funded' %}<th class="r">LIABILITY</th>{% endif %}
                     <th></th>
                 </tr>
@@ -136,6 +137,7 @@
                             </span>
                         </div>
                     </td>
+		    <td class="r mono fw-500">{{ t.payout_pct | int }}%</td>
                     {% if phase == 'Funded' %}
                     <td class="r mono {{ 'neg' if t.pot_liability > 0 else 'dim' }}">
                         ${{ "{:,.0f}".format(t.pot_liability) }}
