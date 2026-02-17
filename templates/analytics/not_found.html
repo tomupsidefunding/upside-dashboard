@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Trader Not Found{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h1>Trader Not Found</h1>
+    </div>
+</div>
+
+<div class="not-found-container">
+    <div class="not-found-card">
+        <div class="not-found-icon">⚠️</div>
+        <h2>No Data Found</h2>
+        <p>No trading data found for: <strong>{{ identifier }}</strong></p>
+        <p class="help-text">
+            This could mean:
+        </p>
+        <ul class="help-list">
+            <li>The email or account number doesn't exist</li>
+            <li>The account has no completed trades yet</li>
+            <li>There may be a typo in the identifier</li>
+        </ul>
+        <div class="actions">
+            <a href="{{ url_for('analytics.analytics_search') }}" class="btn-primary">Try Another Search</a>
+            <a href="{{ url_for('dashboard.index') }}" class="btn-secondary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.not-found-container {
+    max-width: 600px;
+    margin: 4rem auto;
+}
+
+.not-found-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 3rem;
+    text-align: center;
+}
+
+.not-found-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.not-found-card h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.not-found-card p {
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+}
+
+.help-text {
+    margin-top: 2rem;
+    font-size: 0.875rem;
+}
+
+.help-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 2rem 0;
+    text-align: left;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.help-list li {
+    padding: 0.5rem 0;
+    color: var(--text-dim);
+    font-size: 0.875rem;
+}
+
+.help-list li:before {
+    content: "• ";
+    color: #3b82f6;
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+.actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.btn-primary {
+    padding: 0.75rem 1.5rem;
+    background: #3b82f6;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    background: #374151;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+</style>
+{% endblock %}

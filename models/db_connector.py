@@ -350,3 +350,230 @@ def get_daily_equity_series(login: int):
             ORDER BY date_time ASC
         """, (login,))
         return cursor.fetchall()
+# ── Analytics Functions ────────────────────────────────────────────────────────
+# Add these functions to the END of your models/db_connector.py file
+
+def get_trader_analytics(identifier: str):
+    """
+    Get comprehensive analytics for a trader by email or login.
+    Returns detailed performance metrics and trade breakdown.
+    """
+    with prod_conn() as conn:
+        cursor = conn.cursor()
+        
+        # Build query to get all deals for this trader
+        # Check if identifier is email or login
+        if '@' in identifier:
+            filter_clause = "c.email = %s"
+        else:
+            filter_clause = "a.login = %s"
+        
+        query = f"""
+        SELECT a.login, d.initial_balance, b.challenge_type_id, 
+               a.position_id AS Position_ID, a.deal AS Deal_ID, a.order AS Order_ID,
+               REPLACE(REPLACE(a.action, 0, 'BUY'), 1, 'SELL') AS Action,
+               REPLACE(REPLACE(REPLACE(a.entry, 0, 'OPEN'), 1, 'CLOSE'), 3, 'CLOSE') AS Entry_Exit,
+               a.contract_size, a.commission, a.time_msc, FROM_UNIXTIME(a.time) AS time,
+               a.symbol, a.price, a.volume/10000*a.contract_size AS Volume, 
+               a.profit, (a.profit + a.commission) AS net_profit,
+               b.trader_id, c.first_name, c.last_name, c.email
+        FROM `TheUpsideFunding-MT5`.deals a
+        LEFT JOIN bl_fund_production.challenge_accounts b ON a.login = b.number
+        LEFT JOIN bl_fund_production.traders c ON b.trader_id = c.id
+        LEFT JOIN bl_fund_production.challenge_types d ON d.id = b.challenge_type_id
+        WHERE a.Order <> 0 AND {filter_clause}
+        ORDER BY a.position_id, a.time
+        """
+        
+        cursor.execute(query, (identifier,))
+        raw_deals = cursor.fetchall()
+    
+    if not raw_deals:
+        return None
+    
+    # Process deals into completed positions
+    import pandas as pd
+    df = pd.DataFrame(raw_deals)
+    
+    # Get trader info
+    trader_info = {
+        'login': df.iloc[0]['login'],
+        'email': df.iloc[0]['email'],
+        'first_name': df.iloc[0]['first_name'],
+        'last_name': df.iloc[0]['last_name'],
+    }
+    
+    # Process into completed positions
+    processed_positions = _process_deals_to_positions(df)
+    
+    if not processed_positions:
+        return None
+    
+    # Calculate analytics
+    analytics = _calculate_analytics_metrics(processed_positions)
+    analytics['trader_info'] = trader_info
+    analytics['total_positions'] = len(processed_positions)
+    analytics['positions'] = processed_positions
+    
+    return analytics
+
+
+def _process_deals_to_positions(df):
+    """Process raw deals into completed positions"""
+    import pandas as pd
+    
+    # Separate opens and closes
+    opens = df[df['Entry_Exit'] == 'OPEN'].copy()
+    closes = df[df['Entry_Exit'] == 'CLOSE'].copy()
+    
+    # Find completed positions
+    open_positions = set(opens['Position_ID'].unique())
+    close_positions = set(closes['Position_ID'].unique())
+    completed = open_positions.intersection(close_positions)
+    
+    positions = []
+    
+    for position_id in completed:
+        pos_opens = opens[opens['Position_ID'] == position_id]
+        pos_closes = closes[closes['Position_ID'] == position_id]
+        
+        if pos_opens.empty or pos_closes.empty:
+            continue
+        
+        # Aggregate volumes and calculate weighted average prices
+        total_volume = pos_opens['Volume'].sum()
+        entry_price = (pos_opens['price'] * pos_opens['Volume']).sum() / total_volume if total_volume > 0 else 0
+        exit_price = (pos_closes['price'] * pos_closes['Volume']).sum() / total_volume if total_volume > 0 else 0
+        
+        profit_loss = pos_opens['net_profit'].sum() + pos_closes['net_profit'].sum()
+        
+        # Get times
+        entry_time = pd.to_datetime(pos_opens['time'].min())
+        exit_time = pd.to_datetime(pos_closes['time'].max())
+        hold_minutes = (exit_time - entry_time).total_seconds() / 60 if exit_time > entry_time else 0
+        
+        positions.append({
+            'position_id': position_id,
+            'symbol': pos_opens.iloc[0]['symbol'],
+            'action': pos_opens.iloc[0]['Action'],
+            'entry_time': entry_time,
+            'exit_time': exit_time,
+            'entry_price': entry_price,
+            'exit_price': exit_price,
+            'volume': total_volume,
+            'profit_loss': profit_loss,
+            'hold_time_minutes': hold_minutes,
+        })
+    
+    return positions
+
+
+def _calculate_analytics_metrics(positions):
+    """Calculate comprehensive analytics from positions"""
+    if not positions:
+        return {}
+    
+    import pandas as pd
+    import numpy as np
+    
+    df = pd.DataFrame(positions)
+    
+    total_trades = len(df)
+    wins = df[df['profit_loss'] > 0]
+    losses = df[df['profit_loss'] < 0]
+    
+    winning_trades = len(wins)
+    losing_trades = len(losses)
+    
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+    
+    total_pnl = df['profit_loss'].sum()
+    avg_pnl = df['profit_loss'].mean()
+    
+    avg_win = wins['profit_loss'].mean() if not wins.empty else 0
+    avg_loss = losses['profit_loss'].mean() if not losses.empty else 0
+    
+    largest_win = df['profit_loss'].max()
+    largest_loss = df['profit_loss'].min()
+    
+    # Profit factor
+    gross_profit = wins['profit_loss'].sum() if not wins.empty else 0
+    gross_loss = abs(losses['profit_loss'].sum()) if not losses.empty else 0
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else (float('inf') if gross_profit > 0 else 0)
+    
+    # Risk/Reward
+    risk_reward = abs(avg_win / avg_loss) if avg_loss != 0 else (float('inf') if avg_win > 0 else 0)
+    
+    # Trade expectancy
+    loss_rate = (losing_trades / total_trades * 100) if total_trades > 0 else 0
+    trade_expectancy = (win_rate/100 * avg_win) - (loss_rate/100 * abs(avg_loss))
+    
+    # Symbol breakdown
+    symbol_stats = []
+    for symbol, symbol_df in df.groupby('symbol'):
+        symbol_total = len(symbol_df)
+        symbol_wins = len(symbol_df[symbol_df['profit_loss'] > 0])
+        symbol_losses = len(symbol_df[symbol_df['profit_loss'] < 0])
+        symbol_win_rate = (symbol_wins / symbol_total * 100) if symbol_total > 0 else 0
+        symbol_pnl = symbol_df['profit_loss'].sum()
+        
+        symbol_wins_df = symbol_df[symbol_df['profit_loss'] > 0]
+        symbol_losses_df = symbol_df[symbol_df['profit_loss'] < 0]
+        symbol_avg_win = symbol_wins_df['profit_loss'].mean() if not symbol_wins_df.empty else 0
+        symbol_avg_loss = symbol_losses_df['profit_loss'].mean() if not symbol_losses_df.empty else 0
+        
+        symbol_expectancy = (symbol_win_rate/100 * symbol_avg_win) - ((100-symbol_win_rate)/100 * abs(symbol_avg_loss))
+        
+        symbol_stats.append({
+            'symbol': symbol,
+            'total_trades': symbol_total,
+            'win_rate': round(symbol_win_rate, 1),
+            'total_pnl': round(symbol_pnl, 2),
+            'avg_win': round(symbol_avg_win, 2),
+            'avg_loss': round(symbol_avg_loss, 2),
+            'expectancy': round(symbol_expectancy, 2),
+        })
+    
+    # Sort by expectancy descending
+    symbol_stats = sorted(symbol_stats, key=lambda x: x['expectancy'], reverse=True)
+    
+    # Hold time analysis
+    avg_hold = df['hold_time_minutes'].mean()
+    avg_winner_hold = wins['hold_time_minutes'].mean() if not wins.empty else 0
+    avg_loser_hold = losses['hold_time_minutes'].mean() if not losses.empty else 0
+    
+    return {
+        'total_trades': total_trades,
+        'winning_trades': winning_trades,
+        'losing_trades': losing_trades,
+        'win_rate': round(win_rate, 1),
+        'total_pnl': round(total_pnl, 2),
+        'avg_pnl': round(avg_pnl, 2),
+        'avg_win': round(avg_win, 2),
+        'avg_loss': round(avg_loss, 2),
+        'largest_win': round(largest_win, 2),
+        'largest_loss': round(largest_loss, 2),
+        'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 'Infinite',
+        'risk_reward': round(risk_reward, 2) if risk_reward != float('inf') else 'Infinite',
+        'trade_expectancy': round(trade_expectancy, 2),
+        'avg_hold_minutes': round(avg_hold, 1),
+        'avg_winner_hold_minutes': round(avg_winner_hold, 1),
+        'avg_loser_hold_minutes': round(avg_loser_hold, 1),
+        'symbol_breakdown': symbol_stats,
+    }
+
+
+def format_hold_time(minutes):
+    """Format hold time in readable format"""
+    if minutes < 1:
+        return f"{int(minutes * 60)} seconds"
+    elif minutes < 60:
+        return f"{int(minutes)} minutes"
+    elif minutes < 1440:
+        hours = int(minutes / 60)
+        mins = int(minutes % 60)
+        return f"{hours}h {mins}m"
+    else:
+        days = int(minutes / 1440)
+        hours = int((minutes % 1440) / 60)
+        return f"{days}d {hours}h"

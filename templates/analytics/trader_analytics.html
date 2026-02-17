@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+{% block title %}Trader Analytics — {{ analytics.trader_info.first_name }} {{ analytics.trader_info.last_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <span class="title-eyebrow">TRADER ANALYTICS</span>
+        <h1>{{ analytics.trader_info.first_name }} {{ analytics.trader_info.last_name }}</h1>
+        <p class="trader-meta">{{ analytics.trader_info.email }} | Login: {{ analytics.trader_info.login }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('dashboard.index') }}" class="btn-secondary">← Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="analytics-summary">
+    <div class="stat-card">
+        <div class="stat-label">Total P&L</div>
+        <div class="stat-value {{ 'positive' if analytics.total_pnl > 0 else 'negative' }}">
+            ${{ "{:,.2f}".format(analytics.total_pnl) }}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Trade Expectancy</div>
+        <div class="stat-value">
+            ${{ "{:.2f}".format(analytics.trade_expectancy) }}
+        </div>
+        <div class="stat-note">per trade</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Win Rate</div>
+        <div class="stat-value">{{ analytics.win_rate }}%</div>
+        <div class="stat-note">{{ analytics.winning_trades }}W / {{ analytics.losing_trades }}L</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Trades</div>
+        <div class="stat-value">{{ analytics.total_trades }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Profit Factor</div>
+        <div class="stat-value">{{ analytics.profit_factor }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Risk/Reward</div>
+        <div class="stat-value">{{ analytics.risk_reward }}</div>
+    </div>
+</div>
+
+<!-- Key Insights -->
+<section class="insights-section">
+    <h2>Key Insights</h2>
+    <div class="insights-grid">
+        {% for insight in insights %}
+        <div class="insight-card">
+            <span class="insight-icon">💡</span>
+            <p>{{ insight }}</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Win/Loss Breakdown -->
+<section class="metrics-section">
+    <h2>Win/Loss Breakdown</h2>
+    <div class="metrics-grid">
+        <div class="metric-row">
+            <span class="metric-label">Average Win:</span>
+            <span class="metric-value positive">${{ "{:,.2f}".format(analytics.avg_win) }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Average Loss:</span>
+            <span class="metric-value negative">${{ "{:,.2f}".format(analytics.avg_loss) }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Largest Win:</span>
+            <span class="metric-value">${{ "{:,.2f}".format(analytics.largest_win) }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Largest Loss:</span>
+            <span class="metric-value">${{ "{:,.2f}".format(analytics.largest_loss) }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Hold Time Analysis -->
+<section class="metrics-section">
+    <h2>Hold Time Analysis</h2>
+    <div class="metrics-grid">
+        <div class="metric-row">
+            <span class="metric-label">Average Hold Time:</span>
+            <span class="metric-value">{{ analytics.avg_hold_formatted }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Average Winner Hold:</span>
+            <span class="metric-value">{{ analytics.avg_winner_hold_formatted }}</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Average Loser Hold:</span>
+            <span class="metric-value">{{ analytics.avg_loser_hold_formatted }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Symbol Breakdown -->
+<section class="symbol-section">
+    <h2>Symbol Performance Breakdown</h2>
+    <table class="symbol-table">
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>Trades</th>
+                <th>Win Rate</th>
+                <th>Total P&L</th>
+                <th>Avg Win</th>
+                <th>Avg Loss</th>
+                <th>Expectancy</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for symbol in analytics.symbol_breakdown %}
+            <tr class="{{ 'negative-row' if symbol.expectancy < 0 else '' }}">
+                <td class="symbol-name">{{ symbol.symbol }}</td>
+                <td>{{ symbol.total_trades }}</td>
+                <td>{{ symbol.win_rate }}%</td>
+                <td class="{{ 'positive' if symbol.total_pnl > 0 else 'negative' }}">
+                    ${{ "{:,.2f}".format(symbol.total_pnl) }}
+                </td>
+                <td class="positive">${{ "{:,.2f}".format(symbol.avg_win) }}</td>
+                <td class="negative">${{ "{:,.2f}".format(symbol.avg_loss) }}</td>
+                <td class="{{ 'positive' if symbol.expectancy > 0 else 'negative' }}">
+                    ${{ "{:,.2f}".format(symbol.expectancy) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<style>
+.analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    margin: 0.5rem 0;
+}
+
+.stat-value.positive { color: #22c55e; }
+.stat-value.negative { color: #ef4444; }
+
+.stat-note {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+}
+
+.insights-section {
+    margin: 3rem 0;
+}
+
+.insights-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.insights-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.insight-card {
+    background: #1e293b;
+    border-left: 4px solid #3b82f6;
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.insight-icon {
+    font-size: 1.5rem;
+}
+
+.metrics-section {
+    margin: 3rem 0;
+}
+
+.metrics-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.metrics-grid {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: grid;
+    gap: 1rem;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.metric-row:last-child {
+    border-bottom: none;
+}
+
+.metric-label {
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
+.metric-value {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+}
+
+.metric-value.positive { color: #22c55e; }
+.metric-value.negative { color: #ef4444; }
+
+.symbol-section {
+    margin: 3rem 0;
+}
+
+.symbol-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.symbol-table {
+    width: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.symbol-table th {
+    background: #1e293b;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.05em;
+}
+
+.symbol-table td {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.symbol-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.symbol-table .negative-row {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.symbol-name {
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+.trader-meta {
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    background: #374151;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+</style>
+{% endblock %}

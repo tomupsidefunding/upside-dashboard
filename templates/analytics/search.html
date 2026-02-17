@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Trader Analytics Search{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <span class="title-eyebrow">ANALYTICS</span>
+        <h1>Trader Performance Search</h1>
+    </div>
+</div>
+
+<div class="search-container">
+    <form method="POST" class="search-form">
+        <div class="search-box">
+            <input type="text" 
+                   name="identifier" 
+                   placeholder="Enter email or account number..." 
+                   class="search-input"
+                   autofocus
+                   required>
+            <button type="submit" class="search-button">Search</button>
+        </div>
+        <p class="search-help">
+            Search by trader email (e.g., trader@example.com) or account login number (e.g., 123456)
+        </p>
+    </form>
+</div>
+
+<style>
+.search-container {
+    max-width: 600px;
+    margin: 4rem auto;
+}
+
+.search-form {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2rem;
+}
+
+.search-box {
+    display: flex;
+    gap: 1rem;
+}
+
+.search-input {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    background: #0f172a;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: white;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.search-button {
+    padding: 1rem 2rem;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-button:hover {
+    background: #2563eb;
+}
+
+.search-help {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    text-align: center;
+}
+</style>
+{% endblock %}
