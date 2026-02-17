@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, abort, jsonify
 from flask_login import login_required, current_user
 from models.db_connector import (
-    get_roster, get_roster_summary,
+    get_trader_roster, get_summary_stats,
     get_trader_roster_row, get_daily_equity_series, get_deals,
     PHASE_ORDER,
 )
@@ -17,7 +17,7 @@ def index():
         return redirect(url_for('dashboard.trader_detail', login=current_user.trader_id))
 
     roster  = get_roster()
-    summary = get_roster_summary(roster)
+    summary = get_summary_stats(roster)
 
     # Group roster by phase for the template
     by_phase = {phase: [] for phase in PHASE_ORDER}
