@@ -16,7 +16,7 @@ def index():
     if not current_user.is_manager:
         return redirect(url_for('dashboard.trader_detail', login=current_user.trader_id))
 
-    roster  = get_roster()
+    roster  = get_trader_roster()
     summary = get_summary_stats(roster)
 
     # Group roster by phase for the template
