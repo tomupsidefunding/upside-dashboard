@@ -318,6 +318,7 @@ def get_summary_stats(roster: list):
         'phase1': phase1,
         'total_liability': total_liability,
         'weighted_avg_pct': round(weighted_avg, 3),
+        'total_equity': total_equity,
     }
 
 
