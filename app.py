@@ -7,6 +7,8 @@ from models.user import User
 from routes.auth import auth_bp
 from routes.dashboard import dashboard_bp
 from routes.analytics import analytics_bp
+from routes.trader_check import trader_check_bp
+from routes.risk_engine import risk_engine_bp
 
 load_dotenv()
 
@@ -37,7 +39,9 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(analytics_bp)
-    print("✓ Analytics blueprint registered")
+    app.register_blueprint(trader_check_bp)
+    app.register_blueprint(risk_engine_bp)
+    print("✓ All blueprints registered")
     
     # ── Error Handler ─────────────────────────────────────────────────────────
     @app.errorhandler(Exception)
