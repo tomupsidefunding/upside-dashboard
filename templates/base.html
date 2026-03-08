@@ -8,6 +8,61 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <style>
+        .service-nav {
+            background: #080a10;
+            border-bottom: 1px solid #1a1d2e;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            height: 42px;
+        }
+        .service-nav a {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 0 18px;
+            height: 100%;
+            font-family: 'Syne', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #444;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+        .service-nav a:hover { color: #888; }
+        .service-nav a.active {
+            color: #e0e0e0;
+            border-bottom-color: #4f8ef7;
+        }
+        .service-nav a.active .svc-dot { background: #4f8ef7; }
+        .service-nav a.coming-soon {
+            cursor: default;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        .svc-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #333;
+            flex-shrink: 0;
+        }
+        .svc-badge {
+            font-size: 0.6rem;
+            font-family: 'DM Mono', monospace;
+            color: #444;
+            background: #1a1d2e;
+            padding: 1px 5px;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            margin-left: 2px;
+        }
+    </style>
 </head>
 <body>
 
@@ -24,6 +79,24 @@
         <a href="{{ url_for('auth.logout') }}" class="nav-logout">Sign out</a>
     </div>
 </nav>
+
+<nav class="service-nav">
+    <a href="{{ url_for('dashboard.index') }}"
+       class="{{ 'active' if request.blueprint in ('dashboard', 'analytics') else '' }}">
+        <span class="svc-dot"></span>
+        Analytics Dashboard
+    </a>
+    <a href="#" class="coming-soon">
+        <span class="svc-dot"></span>
+        Trader Check
+        <span class="svc-badge">SOON</span>
+    </a>
+    <a href="#" class="coming-soon">
+        <span class="svc-dot"></span>
+        Risk Engine
+        <span class="svc-badge">SOON</span>
+    </a>
+</nav>
 {% endif %}
 
 <main class="main-content">
@@ -32,7 +105,6 @@
             <div class="flash flash-{{ category }}">{{ message }}</div>
         {% endfor %}
     {% endwith %}
-
     {% block content %}{% endblock %}
 </main>
 
