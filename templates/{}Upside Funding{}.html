@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<!-- saved from url=(0044)file:///C:/Users/tommo/Downloads/base_2.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Upside Funding{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+    <link href="./{}Upside Funding{}_files/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///C:/Users/tommo/Downloads/%7B%7B%20url_for(&#39;static&#39;,%20filename=&#39;css/main.css&#39;)%20%7D%7D">
+    <style>
+        /* ── Service Nav ─────────────────────────────────────────────────── */
+        .service-nav {
+            background: #080a10;
+            border-bottom: 1px solid #1a1d2e;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            height: 42px;
+        }
+
+        .service-nav a {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 0 18px;
+            height: 100%;
+            font-family: 'Syne', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #444;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+        }
+
+        .service-nav a:hover {
+            color: #888;
+        }
+
+        .service-nav a.active {
+            color: #e0e0e0;
+            border-bottom-color: #4f8ef7;
+        }
+
+        .service-nav a.active .svc-dot {
+            background: #4f8ef7;
+        }
+
+        .service-nav a.coming-soon {
+            cursor: default;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .svc-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #333;
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }
+
+        .svc-badge {
+            font-size: 0.6rem;
+            font-family: 'DM Mono', monospace;
+            color: #444;
+            background: #1a1d2e;
+            padding: 1px 5px;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            margin-left: 2px;
+        }
+    </style>
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="topnav">
+    <div class="nav-brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">UPSIDE</span>
+        <span class="brand-sub">FUNDING</span>
+    </div>
+    <div class="nav-right">
+        <span class="nav-user">{{ current_user.name }}</span>
+        <span class="nav-role">{{ current_user.role }}</span>
+        <a href="file:///C:/Users/tommo/Downloads/%7B%7B%20url_for(&#39;auth.logout&#39;)%20%7D%7D" class="nav-logout">Sign out</a>
+    </div>
+</nav>
+
+<!-- Service Navigation -->
+<nav class="service-nav">
+    <a href="file:///C:/Users/tommo/Downloads/%7B%7B%20url_for(&#39;dashboard.index&#39;)%20%7D%7D" class="{{ &#39;active&#39; if request.blueprint in (&#39;dashboard&#39;, &#39;analytics&#39;) else &#39;&#39; }}">
+        <span class="svc-dot"></span>
+        Analytics Dashboard
+    </a>
+    <a href="file:///C:/Users/tommo/Downloads/%7B%7B%20url_for(&#39;trader_check.index&#39;)%20%7D%7D" class="{{ &#39;active&#39; if request.blueprint == &#39;trader_check&#39; else &#39;&#39; }} coming-soon">
+        <span class="svc-dot"></span>
+        Trader Check
+        <span class="svc-badge">SOON</span>
+    </a>
+    <a href="file:///C:/Users/tommo/Downloads/%7B%7B%20url_for(&#39;risk_engine.index&#39;)%20%7D%7D" class="{{ &#39;active&#39; if request.blueprint == &#39;risk_engine&#39; else &#39;&#39; }} coming-soon">
+        <span class="svc-dot"></span>
+        Risk Engine
+        <span class="svc-badge">SOON</span>
+    </a>
+</nav>
+{% endif %}
+
+<main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<script src="./{}Upside Funding{}_files/chart.umd.min.js.download"></script>
+{% block scripts %}{% endblock %}
+
+
+
+</body></html>
